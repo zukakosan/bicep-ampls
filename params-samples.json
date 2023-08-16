@@ -5,6 +5,9 @@
         "location": {
             "value": "japaneast"
         },
+        "vmName":{
+            "value": "vm-win-001"
+        },
         "vmAdminUserName": {
             "value": "azureuser"
         },

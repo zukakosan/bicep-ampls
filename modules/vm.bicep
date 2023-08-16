@@ -1,5 +1,6 @@
 param location string
 param subnetId string
+param vmName string
 param vmAdminUserName string
 @secure()
 param vmAdminPassword string
@@ -24,14 +25,14 @@ resource VMCloudNic 'Microsoft.Network/networkInterfaces@2020-11-01' = {
 
 
 resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
-  name: 'vm-cloud-win'
+  name: vmName
   location: location
   properties: {
     hardwareProfile: {
       vmSize: 'Standard_B2ms'
     }
     osProfile: {
-      computerName: 'vm-cloud-win'
+      computerName: vmName
       adminUsername: vmAdminUserName
       adminPassword: vmAdminPassword
     }
@@ -64,3 +65,6 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
 }
 
 output windowsVMId string = windowsVM.id
+output windowsVMName string = windowsVM.name
+// output windowsVM resource = windowsVM
+
