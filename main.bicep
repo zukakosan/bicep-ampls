@@ -3,9 +3,8 @@ param vmName string
 param vmAdminUserName string
 @secure()
 param vmAdminPassword string
-//RGの作成もBicepに含められる？
-// param resourceGroupName string = '20230815-ampls-bicep'
 
+// Define private DNS zone name as array
 param zones array = [
   'agentsvc.azure-automation.net'
   'blob.${environment().suffixes.storage}' // blob.core.windows.net
@@ -14,7 +13,7 @@ param zones array = [
   'oms.opinsights.azure.com'
 ]
 
-// 先にNSG作成
+// Create Network Security Group before VNet to attach NSG to Subnet
 resource VNetCloudNSG 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
   name: 'vnet-cloud-nsg'
   location: location
@@ -37,7 +36,7 @@ resource VNetCloudNSG 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
     // ]
   }
 }
-
+// Create VNet
 resource VNetCloud 'Microsoft.Network/virtualNetworks@2019-11-01' = {
   name: 'vnet-cloud'
   location: location
@@ -103,8 +102,7 @@ resource AMPLS 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = {
       //     queryAccessMode: 'string'
       //   }
       // ]
-      //あとでPrivate Onlyに直す
-      ingestionAccessMode: 'PrivateOnly'
+      ingestionAccessMode: 'PrivateOnly' // PrivateOnly, Open
       queryAccessMode: 'Open'
     }
   }
@@ -124,8 +122,7 @@ resource PeAmpls 'Microsoft.Network/privateEndpoints@2021-05-01' = {
         properties: {
           privateLinkServiceId: AMPLS.id
           groupIds: [
-            //Azure PortalですでにデプロイされているLAWのJSONと比較
-            'azuremonitor'
+            'azuremonitor' // aquire this value from the existing private endpoint used for AMPLS
           ]
         }
       }
@@ -133,7 +130,7 @@ resource PeAmpls 'Microsoft.Network/privateEndpoints@2021-05-01' = {
   }
 }
 
-// VMの作成
+// Call VM module
 module CreateVM './modules/vm.bicep' = {
   name: 'vm'
   params: {
@@ -160,8 +157,8 @@ module DCRDCE './modules/DCRDCE.bicep' = {
   ]
 }
 
-
-//DCEとLAWをAMPLSに紐づける
+// Create Scoped Resource
+// Connect Log Analytics Workspace to AMPLS
 resource AmplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   name: 'amplsScopedLaw'
   parent: AMPLS
@@ -170,6 +167,7 @@ resource AmplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@20
   }
 }
 
+// Connect Data Collection Endpoint to AMPLS
 resource AmplsScopedDCE 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   name: 'amplsScopedDCE'
   parent: AMPLS
@@ -181,9 +179,8 @@ resource AmplsScopedDCE 'Microsoft.Insights/privateLinkScopes/scopedResources@20
   ]
 }
 
-
-// private DNS Zoneの作成
-// 繰り返しになるので zones は配列で定義
+// Create Private DNS Zone
+// Define zone name as array
 // https://blog.aimless.jp/archives/2022/07/use-integration-between-private-endpoint-and-private-dns-zone-in-bicep/#:~:text=Private%20Endpoint%20%E3%81%A8%20Private%20DNS%20Zone%20%E3%81%AE%E8%87%AA%E5%8B%95%E9%80%A3%E6%90%BA%E3%82%92%20Bicep,%E3%81%AE%E3%83%97%E3%83%A9%E3%82%A4%E3%83%99%E3%83%BC%E3%83%88%20IP%20%E3%82%A2%E3%83%89%E3%83%AC%E3%82%B9%E3%81%AB%E5%90%8D%E5%89%8D%E8%A7%A3%E6%B1%BA%E3%81%99%E3%82%8B%E5%BF%85%E8%A6%81%E3%81%8C%E3%81%82%E3%82%8A%E3%81%BE%E3%81%99%E3%80%82%20%E3%81%93%E3%81%AE%E5%90%8D%E5%89%8D%E8%A7%A3%E6%B1%BA%E3%82%92%E5%AE%9F%E7%8F%BE%E3%81%99%E3%82%8B%E3%81%9F%E3%82%81%E3%81%AE%E4%B8%80%E3%81%A4%E3%81%AE%E3%82%AA%E3%83%97%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%8C%20Private%20DNS%20Zone%20%E3%81%A7%E3%81%99%E3%80%82
 resource privateDnsZoneForAmpls 'Microsoft.Network/privateDnsZones@2020-06-01' = [for zone in zones: {
   name: 'privatelink.${zone}'
@@ -192,7 +189,7 @@ resource privateDnsZoneForAmpls 'Microsoft.Network/privateDnsZones@2020-06-01' =
   }
 }]
 
-// Private DNS ZoneとVNETの紐づけ
+// Connect Private DNS Zone to VNet
 resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (zone,i) in zones: { 
   parent: privateDnsZoneForAmpls[i]
   name: '${zone}-link'
@@ -205,42 +202,64 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   }
 }]
 
-//ここはLoopでかけそう
-resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+// Cannot create more than one private dns zone groups in the private endpoint pe-ampls
+// so name doesn't cantain loop variable = unique name
+// by incremental deploy, privateDnsZoneConfigs will be added during loop
+// VSCode: Unique resource or deployment name is required when looping. The loop item variable "zone" or the index variable "i" must be referenced in at least one of the value expressions of the following properties in the loop body: "name", "parent"
+resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = [for (zone,i) in zones:{
   parent: PeAmpls
-  name: 'pvtEndpointDnsGroupForAmpls'
+  name: 'peDnsGp'
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: privateDnsZoneForAmpls[0].name
+        name: privateDnsZoneForAmpls[i].name
         properties: {
-          privateDnsZoneId: privateDnsZoneForAmpls[0].id
-        }
-      }
-      {
-        name: privateDnsZoneForAmpls[1].name
-        properties: {
-          privateDnsZoneId: privateDnsZoneForAmpls[1].id
-        }
-      }
-      {
-        name: privateDnsZoneForAmpls[2].name
-        properties: {
-          privateDnsZoneId: privateDnsZoneForAmpls[2].id
-        }
-      }
-      {
-        name: privateDnsZoneForAmpls[3].name
-        properties: {
-          privateDnsZoneId: privateDnsZoneForAmpls[3].id
-        }
-      }
-      {
-        name: privateDnsZoneForAmpls[4].name
-        properties: {
-          privateDnsZoneId: privateDnsZoneForAmpls[4].id
+          privateDnsZoneId: privateDnsZoneForAmpls[i].id
         }
       }
     ]
   }
-}
+}]
+
+// // Rewrite with Loop structure? -> "privateDnsZoneLink" is not a loopable resource and bicep array cannot use append/add function
+// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+//   parent: PeAmpls
+//   name: 'pvtEndpointDnsGroupForAmpls'
+//   properties: {
+//     privateDnsZoneConfigs: [
+//       {
+//         name: privateDnsZoneForAmpls[0].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[0].id
+//         }
+//       }
+//       {
+//         name: privateDnsZoneForAmpls[1].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[1].id
+//         }
+//       }
+//       {
+//         name: privateDnsZoneForAmpls[2].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[2].id
+//         }
+//       }
+//       {
+//         name: privateDnsZoneForAmpls[3].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[3].id
+//         }
+//       }
+//       {
+//         name: privateDnsZoneForAmpls[4].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[4].id
+//         }
+//       }
+//     ]
+//   }
+// }
+
+
+
