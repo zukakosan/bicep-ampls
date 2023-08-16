@@ -202,6 +202,7 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   }
 }]
 
+// Create Private DNS Zone Group for "pe-ampls" to register A records automatically
 resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
   parent: PeAmpls
   name: 'pvtEndpointDnsGroupForAmpls'
