@@ -1,6 +1,6 @@
 # Architecture
 This Bicep deploys Azure Monitor Private Link Scope environment with reporting windows VM.
-![](/imgs/ampls-arch.png)
+![](/imgs/ampls-architecture.png)
 
 # Deploy Process
 Simply deploy `main.bicep`.
