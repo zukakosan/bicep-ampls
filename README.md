@@ -1,18 +1,20 @@
 # Architecture
 # Deploy Process
-Simply deploy `main.bicep`
+Simply deploy `main.bicep`.
 
-create resource group
+Create resource group.
 ```bash
-$ az group create --name <YOUR-RG-NAME> --location japaneast
+$ az group create --name <YOUR-RG-NAME> --location <LOCATION>
 ```
-deploy `main.bicep` with/without parameter file
+Deploy `main.bicep` with/without parameter file.
 ```bash
 $ az deployment group create --resource-group <YOUR-RG-NAME> --template-file main.bicep --parameters .\params-samples.json
 ```
 
 
-# Attention
+# Notes
+There are some points to mention.
+
 ## Deploy Error
 If you encount the error like bellow, please redeploy bicep file with the same command.
 ```
