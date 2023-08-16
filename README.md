@@ -26,3 +26,7 @@ $ az deployment group create --resource-group <YOUR-RG-NAME> --template-file mai
 ## Don't use complete mode
 ARM / bicep template deployment in complete mode of private endpoints is not supported because there is no method of referencing the private endpoint network interface in the ARM template to prevent the deletion that happens. 
 The suggestion is to use incremental mode deployment to perform this deployment. 
+
+# Check AMPLS is working
+Open Log Analytics Workspace [Logs] Tab and display `Heartbeat` table. Check the `ComputerIP` is displayed in IPv6 format. This means the log comes through private endpoint.
+![](/imgs/law.png)
