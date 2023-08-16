@@ -19,7 +19,7 @@ $ az deployment group create --resource-group <YOUR-RG-NAME> --template-file mai
 There are some points to mention.
 
 ## Deploy Error
-If you encount the error like bellow, please redeploy bicep file with the same command.
+If you encounter the error like bellow, please redeploy bicep file with the same command.
 ```
 "The resource write operation failed to complete successfully, because it reached terminal provisioning state 'Failed'.","details":[{"code":"BadRequest","message":"Call to microsoft.insights/privateLinkScopes failed. Error message: Mismatching RequiredMembers in Request","details"
 ```
