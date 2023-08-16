@@ -202,16 +202,12 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   }
 }]
 
-// Cannot create more than one private dns zone groups in the private endpoint pe-ampls
-// so name doesn't cantain loop variable = unique name
-// by incremental deploy, privateDnsZoneConfigs will be added during loop
-// VSCode: Unique resource or deployment name is required when looping. The loop item variable "zone" or the index variable "i" must be referenced in at least one of the value expressions of the following properties in the loop body: "name", "parent"
-resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = [for (zone,i) in zones:{
+resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
   parent: PeAmpls
-  name: 'peDnsGp'
+  name: 'pvtEndpointDnsGroupForAmpls'
   properties: {
     privateDnsZoneConfigs: [
-      {
+      for (zone,i) in zones: {
         name: privateDnsZoneForAmpls[i].name
         properties: {
           privateDnsZoneId: privateDnsZoneForAmpls[i].id
@@ -219,7 +215,26 @@ resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
       }
     ]
   }
-}]
+}
+
+// // Cannot create more than one private dns zone groups in the private endpoint pe-ampls
+// // so name doesn't cantain loop variable = unique name
+// // by incremental deploy, privateDnsZoneConfigs will be added during loop
+// // VSCode: Unique resource or deployment name is required when looping. The loop item variable "zone" or the index variable "i" must be referenced in at least one of the value expressions of the following properties in the loop body: "name", "parent"
+// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = [for (zone,i) in zones:{
+//   parent: PeAmpls
+//   name: 'peDnsGp'
+//   properties: {
+//     privateDnsZoneConfigs: [
+//       {
+//         name: privateDnsZoneForAmpls[i].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[i].id
+//         }
+//       }
+//     ]
+//   }
+// }]
 
 // // Rewrite with Loop structure? -> "privateDnsZoneLink" is not a loopable resource and bicep array cannot use append/add function
 // resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
@@ -260,6 +275,23 @@ resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
 //     ]
 //   }
 // }
+
+// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
+//   parent: PeAmpls
+//   name: 'pvtEndpointDnsGroupForAmpls'
+//   properties: {
+//     privateDnsZoneConfigs: [
+//       for index in range(0,indexOf(zones,last(zones))): {
+//         name: privateDnsZoneForAmpls[index].name
+//         properties: {
+//           privateDnsZoneId: privateDnsZoneForAmpls[index].id
+//         }
+//       }
+//     ]
+//   }
+// }
+
+
 
 
 
