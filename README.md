@@ -35,3 +35,6 @@ The suggestion is to use incremental mode deployment to perform this deployment.
 # Check AMPLS is working
 Open Log Analytics Workspace [Logs] Tab and display `Heartbeat` table. Check the `ComputerIP` is displayed in IPv6 format. This means the log comes through private endpoint.
 ![](/imgs/law.png)
+
+# Lisence
+This project is licensed under the MIT License, see the LICENSE.txt file for details.
