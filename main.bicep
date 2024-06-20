@@ -1,8 +1,10 @@
 param location string
-param vmName string
+param suffix string
 param vmAdminUserName string
 @secure()
 param vmAdminPassword string
+
+var vmName = 'vmwin-${suffix}'
 
 // Define private DNS zone name as array
 param zones array = [
@@ -14,8 +16,8 @@ param zones array = [
 ]
 
 // Create Network Security Group before VNet to attach NSG to Subnet
-resource VNetCloudNSG 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
-  name: 'vnet-cloud-nsg'
+resource nsg 'Microsoft.Network/networkSecurityGroups@2023-04-01' = {
+  name: 'nsg-${suffix}'
   location: location
   properties: {
     // securityRules: [
@@ -37,8 +39,8 @@ resource VNetCloudNSG 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
   }
 }
 // Create VNet
-resource VNetCloud 'Microsoft.Network/virtualNetworks@2019-11-01' = {
-  name: 'vnet-cloud'
+resource Vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
+  name: 'vnet-${suffix}'
   location: location
   properties: {
     addressSpace: {
@@ -52,7 +54,7 @@ resource VNetCloud 'Microsoft.Network/virtualNetworks@2019-11-01' = {
         properties: {
           addressPrefix: '10.0.0.0/24'
           networkSecurityGroup: {
-            id: VNetCloudNSG.id
+            id: nsg.id
           }
         }
       }
@@ -61,24 +63,17 @@ resource VNetCloud 'Microsoft.Network/virtualNetworks@2019-11-01' = {
         properties: {
           addressPrefix: '10.0.1.0/24'
           networkSecurityGroup: {
-            id: VNetCloudNSG.id
+            id: nsg.id
           }
         }
       }
     ]
   }
- 
-  resource SubnetMain 'subnets' existing = {
-    name: 'subnet-main'
-  }
-  resource SubnetPE 'subnets' existing = {
-    name: 'subnet-pe'
-  }
 }
 
 // Create Log Analytics Workspace
 resource LawAmpls 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'law-ampls'
+  name: 'law-ampls-${suffix}'
   location: location
   properties: {
     sku: {
@@ -90,8 +85,8 @@ resource LawAmpls 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 }
 
 // Azure Monitor Private Link Scope
-resource AMPLS 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = {
-  name: 'ampls'
+resource Ampls 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = {
+  name: 'ampls-${suffix}'
   location: 'global'
   properties: {
     accessModeSettings: {
@@ -109,33 +104,34 @@ resource AMPLS 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = {
 }
 
 // Create Private Endpoint
-resource PeAmpls 'Microsoft.Network/privateEndpoints@2021-05-01' = {
-  name: 'pe-ampls'
+resource PeAmpls 'Microsoft.Network/privateEndpoints@2023-04-01' = {
+  name: 'pe-ampls-${suffix}'
   location: location
   properties: {
     subnet: {
-      id: VNetCloud::SubnetPE.id
+      id: filter(Vnet.properties.subnets, subnet => subnet.name == 'subnet-pe')[0].id
     }
     privateLinkServiceConnections: [
       {
         name: 'pe-ampls-connection'
         properties: {
-          privateLinkServiceId: AMPLS.id
+          privateLinkServiceId: Ampls.id
           groupIds: [
-            'azuremonitor' // aquire this value from the existing private endpoint used for AMPLS
+            'azuremonitor'
           ]
         }
       }
     ]
+    customNetworkInterfaceName: 'pe-ampls-${suffix}-nic'
   }
 }
 
 // Call VM module
 module CreateVM './modules/vm.bicep' = {
-  name: 'vm'
+  name: 'vm-module'
   params: {
     location: location
-    subnetId: VNetCloud::SubnetMain.id
+    subnetId: filter(Vnet.properties.subnets, subnet => subnet.name == 'subnet-main')[0].id
     vmName: vmName
     vmAdminUserName: vmAdminUserName
     vmAdminPassword: vmAdminPassword
@@ -143,13 +139,14 @@ module CreateVM './modules/vm.bicep' = {
 }
 
 // To execute "resource~existing" after "CreateVM" module, include process in the same module and use "dependsOn"
-module DCRDCE './modules/DCRDCE.bicep' = {
-  name: 'attachDcrDce'
+module DcrDce './modules/dcr-dce.bicep' = {
+  name: 'attachDcrDce-module'
   params: {
     location: location
     vmName: vmName
     LawName: LawAmpls.name
     LawId: LawAmpls.id
+    suffix: suffix
     // AMPLS: AMPLS
   }
   dependsOn:[
@@ -161,7 +158,7 @@ module DCRDCE './modules/DCRDCE.bicep' = {
 // Connect Log Analytics Workspace to AMPLS
 resource AmplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   name: 'amplsScopedLaw'
-  parent: AMPLS
+  parent: Ampls
   properties: {
     linkedResourceId: LawAmpls.id
   }
@@ -170,9 +167,9 @@ resource AmplsScopedLaw 'Microsoft.Insights/privateLinkScopes/scopedResources@20
 // Connect Data Collection Endpoint to AMPLS
 resource AmplsScopedDCE 'Microsoft.Insights/privateLinkScopes/scopedResources@2021-07-01-preview' = {
   name: 'amplsScopedDCE'
-  parent: AMPLS
+  parent: Ampls
   properties: {
-    linkedResourceId: DCRDCE.outputs.DCEWindowsId
+    linkedResourceId: DcrDce.outputs.DCEWindowsId
   }
   dependsOn:[
     AmplsScopedLaw
@@ -197,7 +194,7 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: VNetCloud.id
+      id: Vnet.id
     }
   }
 }]
@@ -217,82 +214,4 @@ resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
     ]
   }
 }
-
-// // Cannot create more than one private dns zone groups in the private endpoint pe-ampls
-// // so name doesn't cantain loop variable = unique name
-// // by incremental deploy, privateDnsZoneConfigs will be added during loop
-// // VSCode: Unique resource or deployment name is required when looping. The loop item variable "zone" or the index variable "i" must be referenced in at least one of the value expressions of the following properties in the loop body: "name", "parent"
-// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = [for (zone,i) in zones:{
-//   parent: PeAmpls
-//   name: 'peDnsGp'
-//   properties: {
-//     privateDnsZoneConfigs: [
-//       {
-//         name: privateDnsZoneForAmpls[i].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[i].id
-//         }
-//       }
-//     ]
-//   }
-// }]
-
-// // Rewrite with Loop structure? -> "privateDnsZoneLink" is not a loopable resource and bicep array cannot use append/add function
-// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-//   parent: PeAmpls
-//   name: 'pvtEndpointDnsGroupForAmpls'
-//   properties: {
-//     privateDnsZoneConfigs: [
-//       {
-//         name: privateDnsZoneForAmpls[0].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[0].id
-//         }
-//       }
-//       {
-//         name: privateDnsZoneForAmpls[1].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[1].id
-//         }
-//       }
-//       {
-//         name: privateDnsZoneForAmpls[2].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[2].id
-//         }
-//       }
-//       {
-//         name: privateDnsZoneForAmpls[3].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[3].id
-//         }
-//       }
-//       {
-//         name: privateDnsZoneForAmpls[4].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[4].id
-//         }
-//       }
-//     ]
-//   }
-// }
-
-// resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = {
-//   parent: PeAmpls
-//   name: 'pvtEndpointDnsGroupForAmpls'
-//   properties: {
-//     privateDnsZoneConfigs: [
-//       for index in range(0,indexOf(zones,last(zones))): {
-//         name: privateDnsZoneForAmpls[index].name
-//         properties: {
-//           privateDnsZoneId: privateDnsZoneForAmpls[index].id
-//         }
-//       }
-//     ]
-//   }
-// }
-
-
-
-
 

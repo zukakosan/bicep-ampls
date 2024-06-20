@@ -5,8 +5,10 @@ param vmAdminUserName string
 @secure()
 param vmAdminPassword string
 
-resource VMCloudNic 'Microsoft.Network/networkInterfaces@2020-11-01' = {
-  name: 'vm-cloud-nic'
+var vmSize = 'Standard_B2ms'
+
+resource Nic 'Microsoft.Network/networkInterfaces@2023-04-01' = {
+  name: '${vmName}-nic'
   location: location
   properties: {
     ipConfigurations: [
@@ -23,13 +25,23 @@ resource VMCloudNic 'Microsoft.Network/networkInterfaces@2020-11-01' = {
   }
 }
 
+resource UaMid 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${vmName}-mid'
+  location: location
+}
 
-resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
+resource WindowsVm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   name: vmName
   location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${UaMid.id}': {}
+    }
+  }
   properties: {
     hardwareProfile: {
-      vmSize: 'Standard_B2ms'
+      vmSize: vmSize
     }
     osProfile: {
       computerName: vmName
@@ -44,7 +56,7 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
         version: 'latest'
       }
       osDisk: {
-        name: 'vm-cloud-win-osdisk'
+        name: '${vmName}-osdisk'
         caching: 'ReadWrite'
         createOption: 'FromImage'
       }
@@ -52,7 +64,7 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
     networkProfile: {
       networkInterfaces: [
         {
-          id: VMCloudNic.id
+          id: Nic.id
         }
       ]
     }
@@ -64,7 +76,7 @@ resource windowsVM 'Microsoft.Compute/virtualMachines@2020-12-01' = {
   }
 }
 
-output windowsVMId string = windowsVM.id
-output windowsVMName string = windowsVM.name
+output windowsVMId string = WindowsVm.id
+output windowsVMName string = WindowsVm.name
 // output windowsVM resource = windowsVM
 

@@ -5,8 +5,8 @@
         "location": {
             "value": "japaneast"
         },
-        "vmName":{
-            "value": "vm-win-001"
+        "suffix":{
+            "value": "zukako"
         },
         "vmAdminUserName": {
             "value": "azureuser"

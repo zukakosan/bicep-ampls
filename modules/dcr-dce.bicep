@@ -2,10 +2,11 @@ param location string
 param vmName string
 param LawId string
 param LawName string
+param suffix string
 // param AMPLS object
 
-resource DCEWindows 'Microsoft.Insights/dataCollectionEndpoints@2021-09-01-preview' = {
-  name: 'dce-ampls'
+resource DCEWindows 'Microsoft.Insights/dataCollectionEndpoints@2022-06-01' = {
+  name: 'dce-ampls-${suffix}'
   location: location
   kind: 'Windows'
   properties: {
@@ -14,15 +15,14 @@ resource DCEWindows 'Microsoft.Insights/dataCollectionEndpoints@2021-09-01-previ
     // immutableId: 'string'
     logsIngestion: {}
     networkAcls: {
-      //あとでDisabledにする
       publicNetworkAccess: 'Disabled'
     }
   }
 }
 
 // DCRの作成
-resource DCRWindows 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' = {
-  name: 'dcr-ampls-win'
+resource DCRWindows 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
+  name: 'dcr-ampls-${suffix}-win'
   location: location
   kind: 'Windows'
   properties: {
@@ -92,15 +92,15 @@ resource DCRWindows 'Microsoft.Insights/dataCollectionRules@2021-09-01-preview' 
   }
 }
 
-// CreateVMモジュールが完了してからexistingで参照したい
-resource windowsVM 'Microsoft.Compute/virtualMachines@2021-07-01' existing = {
+// To set the resource scope, get the existing resource
+// or set the scope as resourceGroup()
+resource windowsVM 'Microsoft.Compute/virtualMachines@2023-03-01' existing = {
   name: vmName
 }
 
-
-//なぜかDCRの割り当てとDCEの割り当てを別で行う必要がある
-resource DCRAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2021-09-01-preview' = {
+resource DCRAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = {
   name: 'configurationDCR'
+  // scope: resourceGroup()
   scope: windowsVM
   properties: {
     // dataCollectionEndpointId: DCEWindows.id
@@ -109,7 +109,7 @@ resource DCRAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2021-
   }
 }
 
-resource DCEAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2021-09-01-preview' = {
+resource DCEAssociation 'Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01' = {
   name: 'configurationAccessEndpoint'
   scope: windowsVM
   properties: {
