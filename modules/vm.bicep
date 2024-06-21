@@ -76,6 +76,26 @@ resource WindowsVm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   }
 }
 
+resource AMA 'Microsoft.Compute/virtualMachines/extensions@2021-11-01' = {
+  name: 'AzureMonitorWindowsAgent'
+  parent: WindowsVm
+  location: location
+  properties: {
+    publisher: 'Microsoft.Azure.Monitor'
+    type: 'AzureMonitorWindowsAgent'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+    settings: {
+      authentication: {
+        managedIdentity: {
+          'identifier-name': 'mi_res_id'
+          'identifier-value': UaMid.id
+        }
+      }
+    }
+  }
+}
+
 output windowsVMId string = WindowsVm.id
 output windowsVMName string = WindowsVm.name
 // output windowsVM resource = windowsVM
