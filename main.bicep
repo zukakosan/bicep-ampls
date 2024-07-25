@@ -213,5 +213,6 @@ resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
       }
     ]
   }
+  dependsOn:privateDnsZoneForAmpls
 }
 
