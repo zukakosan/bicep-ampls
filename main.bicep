@@ -39,7 +39,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-04-01' = {
   }
 }
 // Create VNet
-resource Vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
+resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
   name: 'vnet-${suffix}'
   location: location
   properties: {
@@ -109,7 +109,7 @@ resource PeAmpls 'Microsoft.Network/privateEndpoints@2023-04-01' = {
   location: location
   properties: {
     subnet: {
-      id: filter(Vnet.properties.subnets, subnet => subnet.name == 'subnet-pe')[0].id
+      id: filter(vnet.properties.subnets, subnet => subnet.name == 'subnet-pe')[0].id
     }
     privateLinkServiceConnections: [
       {
@@ -131,7 +131,7 @@ module CreateVM './modules/vm.bicep' = {
   name: 'vm-module'
   params: {
     location: location
-    subnetId: filter(Vnet.properties.subnets, subnet => subnet.name == 'subnet-main')[0].id
+    subnetId: filter(vnet.properties.subnets, subnet => subnet.name == 'subnet-main')[0].id
     vmName: vmName
     vmAdminUserName: vmAdminUserName
     vmAdminPassword: vmAdminPassword
@@ -194,7 +194,7 @@ resource privateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   properties: {
     registrationEnabled: false
     virtualNetwork: {
-      id: Vnet.id
+      id: vnet.id
     }
   }
 }]
