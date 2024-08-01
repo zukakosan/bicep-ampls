@@ -71,6 +71,18 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' = {
   }
 }
 
+// Call VM module
+module CreateVM './modules/vm.bicep' = {
+  name: 'vm-module'
+  params: {
+    location: location
+    subnetId: filter(vnet.properties.subnets, subnet => subnet.name == 'subnet-main')[0].id
+    vmName: vmName
+    vmAdminUserName: vmAdminUserName
+    vmAdminPassword: vmAdminPassword
+  }
+}
+
 // Create Log Analytics Workspace
 resource LawAmpls 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: 'law-ampls-${suffix}'
@@ -124,18 +136,7 @@ resource PeAmpls 'Microsoft.Network/privateEndpoints@2023-04-01' = {
     ]
     customNetworkInterfaceName: 'pe-ampls-${suffix}-nic'
   }
-}
-
-// Call VM module
-module CreateVM './modules/vm.bicep' = {
-  name: 'vm-module'
-  params: {
-    location: location
-    subnetId: filter(vnet.properties.subnets, subnet => subnet.name == 'subnet-main')[0].id
-    vmName: vmName
-    vmAdminUserName: vmAdminUserName
-    vmAdminPassword: vmAdminPassword
-  }
+  dependsOn: privateDnsZoneForAmpls
 }
 
 // To execute "resource~existing" after "CreateVM" module, include process in the same module and use "dependsOn"
@@ -213,6 +214,5 @@ resource peDnsGroupForAmpls 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
       }
     ]
   }
-  dependsOn:privateDnsZoneForAmpls
 }
 

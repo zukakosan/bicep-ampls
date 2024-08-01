@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "location": {
-            "value": "japaneast"
+            "value": "westus2"
         },
         "suffix":{
             "value": "zukako"
